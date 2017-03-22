@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"net/http"
+
 	gojwt "github.com/dgrijalva/jwt-go"
 	baa "gopkg.in/baa.v1"
 )
@@ -26,18 +28,11 @@ type Config struct {
 	ExcludeUrls         string
 }
 
-//定义返回信息格式
-type normalReturn struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-}
-
 // 默认的认证过程出现错误的处理方式
 func onError(c *baa.Context, err string) {
-	c.Break()
 	//认证授权失败
-	ret := normalReturn{Code: 1102, Message: err}
-	c.JSON(200, ret)
+	c.Resp.WriteHeader(http.StatusUnauthorized)
+	c.Resp.Write([]byte(err))
 }
 
 //fromAuthHeader 从request的header中获取凭证信息
