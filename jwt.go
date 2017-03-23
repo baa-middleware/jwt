@@ -35,8 +35,8 @@ func onError(c *baa.Context, err string) {
 	c.Resp.Write([]byte(err))
 }
 
-//fromAuthHeader 从request的header中获取凭证信息
-func fromAuthHeader(c *baa.Context) (string, error) {
+//FromAuthHeader 从request的header中获取凭证信息
+func FromAuthHeader(c *baa.Context) (string, error) {
 	authHeader := c.Req.Header.Get("Authorization")
 	if authHeader == "" {
 		return "", nil // No error, just no token
@@ -56,7 +56,7 @@ func JWT(config Config) baa.HandlerFunc {
 		config.ErrorHandler = onError
 	}
 	if config.Extractor == nil {
-		config.Extractor = fromAuthHeader
+		config.Extractor = FromAuthHeader
 	}
 
 	return func(c *baa.Context) {
