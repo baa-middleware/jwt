@@ -3,9 +3,8 @@ package jwt
 import (
 	"errors"
 	"fmt"
-	"strings"
-
 	"net/http"
+	"strings"
 
 	gojwt "github.com/dgrijalva/jwt-go"
 	baa "gopkg.in/baa.v1"
@@ -57,6 +56,14 @@ func JWT(config Config) baa.HandlerFunc {
 	}
 	if config.Extractor == nil {
 		config.Extractor = FromAuthHeader
+	}
+	if config.SigningMethod == nil {
+		config.SigningMethod = gojwt.SigningMethodHS256
+	}
+	if config.ValidationKeyGetter == nil {
+		config.ValidationKeyGetter = func(token *gojwt.Token) (interface{}, error) {
+			return []byte("vodjk.com"), nil
+		}
 	}
 
 	return func(c *baa.Context) {
