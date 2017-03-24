@@ -139,9 +139,10 @@ func checkJWT(c *baa.Context, config Config) error {
 		config.ErrorHandler(c, "The token isn't valid")
 		return fmt.Errorf("Token is invalid")
 	}
-	//将user_id提取出来放到baa的context中，避免多次解密
+	//将user_id和用户权限提取出来放到baa的context中，避免多次解密
 	claims := parsedToken.Claims.(gojwt.MapClaims)
 	c.Set("user_id", claims["user_id"])
 	c.Set("user_agent", claims["user_agent"])
+	c.Set("user_ops", claims["user_ops"])
 	return nil
 }
