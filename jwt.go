@@ -18,13 +18,19 @@ type tokenExtractor func(c *baa.Context) (string, error)
 
 //Config JWTMiddleware 认证的配置
 type Config struct {
+	//该配置项，接受使用者提供的一串字符，解密时候也会用到，涉及到安全性，不可泄露。
 	ValidationKeyGetter gojwt.Keyfunc
+	//验证过程出现错误的处理方法，默认onError方法，可定制其他处理方式
 	ErrorHandler        errorHandler
 	CredentialsOptional bool
-	Extractor           tokenExtractor
+	//提取jwt凭证的方式，默认从header中获取，可定制为从cookie等获取
+	Extractor tokenExtractor
+	//opthon 方法是否进行验证的开关 true 验证，false 不验证
 	EnableAuthOnOptions bool
-	SigningMethod       gojwt.SigningMethod
-	ExcludeUrls         string
+	//加密方式
+	SigningMethod gojwt.SigningMethod
+	//该配置项配置不进行jwt验证的url，若多个，逗号分隔。比如登录和注册。
+	ExcludeUrls string
 }
 
 // 默认的认证过程出现错误的处理方式
@@ -62,7 +68,7 @@ func JWT(config Config) baa.HandlerFunc {
 	}
 	if config.ValidationKeyGetter == nil {
 		config.ValidationKeyGetter = func(token *gojwt.Token) (interface{}, error) {
-			return []byte("vodjk.com"), nil
+			return []byte("gome.com"), nil
 		}
 	}
 
@@ -141,8 +147,11 @@ func checkJWT(c *baa.Context, config Config) error {
 	}
 	//将user_id和用户权限提取出来放到baa的context中，避免多次解密
 	claims := parsedToken.Claims.(gojwt.MapClaims)
+	//将用户ID写到baa中，即用户标志
 	c.Set("user_id", claims["user_id"])
+	//将用户浏览器标志写到baa中，防止token被劫持
 	c.Set("user_agent", claims["user_agent"])
+	//将用户操作权限写入到baa中，便于rbac权限处理，避免多次读库
 	c.Set("user_ops", claims["user_ops"])
 	return nil
 }
