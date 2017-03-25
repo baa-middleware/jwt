@@ -21,11 +21,12 @@ type Config struct {
 	//该配置项，接受使用者提供的一串字符，解密时候也会用到，涉及到安全性，不可泄露。
 	ValidationKeyGetter gojwt.Keyfunc
 	//验证过程出现错误的处理方法，默认onError方法，可定制其他处理方式
-	ErrorHandler        errorHandler
+	ErrorHandler errorHandler
+	//该配置项 是是否对访问进行接口认证的开关 true 验证
 	CredentialsOptional bool
 	//提取jwt凭证的方式，默认从header中获取，可定制为从cookie等获取
 	Extractor tokenExtractor
-	//opthon 方法是否进行验证的开关 true 验证，false 不验证
+	//option 方法是否进行验证的开关 true 验证，false 不验证
 	EnableAuthOnOptions bool
 	//加密方式
 	SigningMethod gojwt.SigningMethod
