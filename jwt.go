@@ -108,11 +108,11 @@ func checkJWT(c *baa.Context, config Config) error {
 
 	//如果访问的url在排除urls中则不做jwt验证，直接next
 	if len(config.ExcludeRouteName) > 0 {
-		urls := strings.Split(config.ExcludeRouteName, ",")
-		requestURL := c.RouteName()
-		for _, url := range urls {
-			url = strings.ToLower(strings.Trim(url, " \t\r\n"))
-			if strings.EqualFold(url, requestURL) {
+		routes := strings.Split(config.ExcludeRouteName, ",")
+		requestRoute := c.RouteName()
+		for _, route := range routes {
+			route = strings.ToLower(strings.Trim(route, " \t\r\n"))
+			if strings.EqualFold(route, requestRoute) {
 				return nil
 			}
 		}
@@ -149,7 +149,7 @@ func checkJWT(c *baa.Context, config Config) error {
 	if config.SigningMethod != nil && config.SigningMethod.Alg() != parsedToken.Header["alg"] {
 		message := fmt.Sprintf("Expected %s signing method but token specified %s",
 			config.SigningMethod.Alg(),
-			parsedToken.Header["alg"])v
+			parsedToken.Header["alg"])
 		config.ErrorHandler(c, errors.New(message).Error())
 		return fmt.Errorf("Error validating token algorithm: %s", message)
 	}
