@@ -5,11 +5,13 @@ baa middleware for jwt.
 ```
 // Init 中间件初始化
 func Init(b *baa.Baa) {
-	//jwt 认证
+	routers := setting.Config.MustString("jwt.excludeRouteName", "")
+	excludeRouteName := strings.Split(routers, ",")
+
 	option := jwt.Config{
 		SigningKey:          "vodjk.com",
 		CredentialsOptional: true,
-		ExcludeRouteName:    setting.Config.MustString("jwt.ExcludeRouteName", ""),
+		ExcludeRouteName:    excludeRouteName,
 	}
 
 	b.Use(jwt.JWT(option))
