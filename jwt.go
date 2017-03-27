@@ -69,7 +69,7 @@ func JWT(config Config) baa.HandlerFunc {
 	}
 	if config.ValidationKeyGetter == nil {
 		config.ValidationKeyGetter = func(token *gojwt.Token) (interface{}, error) {
-			return []byte("gome.com"), nil
+			return []byte("vodjk.com"), nil
 		}
 	}
 
