@@ -41,9 +41,9 @@ option 方法是否进行验证的开关 true 验证，false 不验证，默认�
 
 加密算法,默认为:SigningMethodHS256
 
-### ExcludeRouteName `string`
+### ExcludeRouteName `[]string`
 
-配置不进行jwt验证的路由，若多个，逗号分隔。比如登录和注册,格式为auth_login,即 controller_action
+配置不进行jwt验证的路由，比如登录和注册,格式为auth_login,即 controller_action
 
 ### ContextKey 
 
