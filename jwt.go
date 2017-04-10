@@ -30,8 +30,8 @@ type Config struct {
 	EnableAuthOnOptions bool
 	//加密方式
 	SigningMethod gojwt.SigningMethod
-	//该配置项配置不进行jwt验证的路由，若多个，逗号分隔。比如登录和注册。
-	ExcludeRouteName []string
+	//该配置项配置不进行jwt验证的路由前缀，若多个，逗号分隔。比如登录和注册。
+	ExcludeRoutePrefix []string
 	//Context key to store user information from the token into context.
 	// Optional. Default value "user".
 	ContextKey string
@@ -106,12 +106,12 @@ func checkJWT(c *baa.Context, config Config) error {
 		}
 	}
 
-	//如果访问的路由在排除路由中则不做jwt验证，直接next
-	if len(config.ExcludeRouteName) > 0 {
-		requestRoute := c.RouteName()
-		for _, route := range config.ExcludeRouteName {
-			route = strings.ToLower(strings.Trim(route, " \t\r\n"))
-			if strings.EqualFold(route, requestRoute) {
+	//如果访问的路由前缀在排除路由前缀中则不做jwt验证，直接next
+	if len(config.ExcludeRoutePrefix) > 0 {
+		requestURL := c.Req.URL.Path
+		for _, prefix := range config.ExcludeRoutePrefix {
+			prefix = strings.ToLower(strings.Trim(prefix, " \t\r\n"))
+			if strings.Index(requestURL, prefix) == 0 {
 				return nil
 			}
 		}
