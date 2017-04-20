@@ -50,7 +50,7 @@ func onError(c *baa.Context, err string) {
 //FromAuthHeader 从request的header中获取凭证信息
 func FromAuthHeader(c *baa.Context) (string, error) {
 	authHeader := c.Req.Header.Get("Authorization")
-	if authHeader == "" {
+	if authHeader == "" || len(authHeader) <= 7 {
 		return "", nil // No error, just no token
 	}
 	// TODO: Make this a bit more robust, parsing-wise
