@@ -91,13 +91,13 @@ func JWT(config Config) baa.HandlerFunc {
 	}
 
 	return func(c *baa.Context) {
-		err := checkJWT(c, config)
-
 		// 如果存在错误，即jwt检查token失败，则访问中断返回
 		//如果错误为nil 则说明验证通过，访问继续
-		if err == nil {
-			c.Next()
+		if err := checkJWT(c, config); err != nil {
+			c.Break()
 		}
+
+		c.Next()
 	}
 }
 
