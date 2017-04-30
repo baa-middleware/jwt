@@ -24,7 +24,7 @@ jwt token在header头中的标识，默认为 `Authorization`
 
 验证token使用的签名字符串
 
-### ErrorHandler `func(c *baa.Context, err string)`
+### ErrorHandler `func(c *baa.Context, err error)`
 
 验证token过程中出现错误执行的操作， 如用户不设置则默认访问返回401未授权
 

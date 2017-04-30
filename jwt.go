@@ -1,7 +1,6 @@
 package jwt
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -11,7 +10,7 @@ import (
 )
 
 //无论什么时候发生错误，该函数将被调用
-type errorHandler func(c *baa.Context, err string)
+type errorHandler func(c *baa.Context, err error)
 
 //TokenExtractor 获取jwt的token的方法，暂时实现了从header中获取
 type tokenExtractor func(name string, c *baa.Context) (string, error)
@@ -50,10 +49,10 @@ type Config struct {
 }
 
 // 默认的认证过程出现错误的处理方式
-func onError(c *baa.Context, err string) {
+func onError(c *baa.Context, err error) {
 	//认证授权失败
 	c.Resp.WriteHeader(http.StatusUnauthorized)
-	c.Resp.Write([]byte(err))
+	c.Resp.Write([]byte(err.Error()))
 }
 
 //FromAuthHeader 从request的header中获取凭证信息
@@ -101,6 +100,7 @@ func JWT(config Config) baa.HandlerFunc {
 		// 如果存在错误，即jwt检查token失败，则访问中断返回
 		//如果错误为nil 则说明验证通过，访问继续
 		if err := checkJWT(c, config); err != nil {
+			config.ErrorHandler(c, err)
 			c.Break()
 		}
 
@@ -139,7 +139,6 @@ func checkJWT(c *baa.Context, config Config) error {
 
 	// 认证过程中出现任何错误，将调用制定的错误处理函数并且返回发生的错误
 	if err != nil {
-		config.ErrorHandler(c, err.Error())
 		return fmt.Errorf("Error extracting token: %v", err)
 	}
 	if token == "" {
@@ -149,16 +148,13 @@ func checkJWT(c *baa.Context, config Config) error {
 		}
 
 		// 设置了认证选项（CredentialsOptional）, 请求的凭证丢失
-		errorMsg := "Required authorization token not found"
-		config.ErrorHandler(c, errorMsg)
-		return fmt.Errorf(errorMsg)
+		return fmt.Errorf("Required authorization token not found")
 	}
 
 	// 按照算法解密token
 	parsedToken, err := gojwt.Parse(token, config.validationKeyGetter)
 
 	if err != nil {
-		config.ErrorHandler(c, err.Error())
 		return fmt.Errorf("Error parsing token: %v", err)
 	}
 
@@ -166,12 +162,10 @@ func checkJWT(c *baa.Context, config Config) error {
 		message := fmt.Sprintf("Expected %s signing method but token specified %s",
 			config.SigningMethod.Alg(),
 			parsedToken.Header["alg"])
-		config.ErrorHandler(c, errors.New(message).Error())
 		return fmt.Errorf("Error validating token algorithm: %s", message)
 	}
 
 	if !parsedToken.Valid {
-		config.ErrorHandler(c, "The token isn't valid")
 		return fmt.Errorf("Token is invalid")
 	}
 	//将自定义信息提取出来放到baa的context中，避免多次解密
@@ -183,7 +177,6 @@ func checkJWT(c *baa.Context, config Config) error {
 	if config.CustomValidator != nil {
 		err := config.CustomValidator(config.Name, c)
 		if err != nil {
-			config.ErrorHandler(c, err.Error())
 			return fmt.Errorf("Custom validate is invalid")
 		}
 	}
