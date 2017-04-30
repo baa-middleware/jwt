@@ -14,28 +14,32 @@ import (
 type errorHandler func(c *baa.Context, err string)
 
 //TokenExtractor 获取jwt的token的方法，暂时实现了从header中获取
-type tokenExtractor func(c *baa.Context) (string, error)
+type tokenExtractor func(name string, c *baa.Context) (string, error)
 
 // customValidator 自定义验证器
-type customValidator func(c *baa.Context) error
+type customValidator func(name string, c *baa.Context) error
 
 //Config JWTMiddleware 认证的配置
 type Config struct {
-	//Signing key to validate token
+	// Name 配置token标识，默认为 Authorization
+	Name string
+	// Signing key to validate token
 	SigningKey string
-	//验证过程出现错误的处理方法，默认onError方法，可定制其他处理方式
+	// ErrorHandler 验证过程出现错误的处理方法，默认onError方法，可定制其他处理方式
 	ErrorHandler errorHandler
-	//该配置项 是是否对访问进行接口认证的开关 true 验证
+	// CredentialsOptional 该配置项 是是否对访问进行接口认证的开关 true 验证
 	CredentialsOptional bool
-	//提取jwt凭证的方式，默认从header中获取，可定制为从cookie等获取
+	// Extractor 提取jwt凭证的方式，默认从header中获取，可定制为从cookie等获取
 	Extractor tokenExtractor
-	//option 方法是否进行验证的开关 true 验证，false 不验证
+	// EnableAuthOnOptions 方法是否进行验证的开关 true 验证，false 不验证
 	EnableAuthOnOptions bool
-	//加密方式
+	// SigningMethod 加密方式
 	SigningMethod gojwt.SigningMethod
-	//该配置项配置不进行jwt验证的路由前缀，若多个，逗号分隔。比如登录和注册。
-	ExcludeRoutePrefix []string
-	//Context key to store user information from the token into context.
+	// ExcludeURL 配置不进行jwt验证的具体URL
+	ExcludeURL []string
+	// ExcludePrefix 配置不进行jwt验证的URL前缀
+	ExcludePrefix []string
+	// ContextKey Context key to store user information from the token into context.
 	// Optional. Default value "user".
 	ContextKey string
 	//CustomValidator 自定义验证器
@@ -53,8 +57,8 @@ func onError(c *baa.Context, err string) {
 }
 
 //FromAuthHeader 从request的header中获取凭证信息
-func FromAuthHeader(c *baa.Context) (string, error) {
-	authHeader := c.Req.Header.Get("Authorization")
+func FromAuthHeader(name string, c *baa.Context) (string, error) {
+	authHeader := c.Req.Header.Get(name)
 	if authHeader == "" || len(authHeader) <= 7 {
 		return "", nil // No error, just no token
 	}
@@ -69,6 +73,9 @@ func FromAuthHeader(c *baa.Context) (string, error) {
 
 //JWT json web token中间件注册到baa
 func JWT(config Config) baa.HandlerFunc {
+	if config.Name == "" {
+		config.Name = "Authorization"
+	}
 	if config.ErrorHandler == nil {
 		config.ErrorHandler = onError
 	}
@@ -111,19 +118,24 @@ func checkJWT(c *baa.Context, config Config) error {
 		}
 	}
 
-	//如果访问的路由前缀在排除路由前缀中则不做jwt验证，直接next
-	if len(config.ExcludeRoutePrefix) > 0 {
-		requestURL := c.Req.URL.Path
-		for _, prefix := range config.ExcludeRoutePrefix {
-			prefix = strings.ToLower(strings.Trim(prefix, " \t\r\n"))
-			if strings.Index(requestURL, prefix) == 0 {
+	// 检查排除的URL
+	if len(config.ExcludeURL) > 0 {
+		for _, url := range config.ExcludeURL {
+			if url == c.Req.URL.Path {
+				return nil
+			}
+		}
+	}
+	if len(config.ExcludePrefix) > 0 {
+		for _, prefix := range config.ExcludePrefix {
+			if strings.HasPrefix(c.Req.URL.Path, prefix) {
 				return nil
 			}
 		}
 	}
 
 	// 从request中按照初始化jwt中间件制定的方法获取token
-	token, err := config.Extractor(c)
+	token, err := config.Extractor(config.Name, c)
 
 	// 认证过程中出现任何错误，将调用制定的错误处理函数并且返回发生的错误
 	if err != nil {
@@ -169,7 +181,7 @@ func checkJWT(c *baa.Context, config Config) error {
 
 	//执行客户自定义的验证
 	if config.CustomValidator != nil {
-		err := config.CustomValidator(c)
+		err := config.CustomValidator(config.Name, c)
 		if err != nil {
 			config.ErrorHandler(c, err.Error())
 			return fmt.Errorf("Custom validate is invalid")

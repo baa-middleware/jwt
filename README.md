@@ -5,13 +5,10 @@ baa middleware for jwt.
 ```
 // Init 中间件初始化
 func Init(b *baa.Baa) {
-	routers := setting.Config.MustString("jwt.excludeRouteName", "")
-	excludeRouteName := strings.Split(routers, ",")
-
 	option := jwt.Config{
 		SigningKey:          "vodjk.com",
 		CredentialsOptional: true,
-		ExcludeRouteName:    excludeRouteName,
+		ExcludeName:         []string{"/login", "/verifycode"},
 	}
 
 	b.Use(jwt.JWT(option))
@@ -19,9 +16,13 @@ func Init(b *baa.Baa) {
 ```
 ## 配置：
 
+### Name `string`
+
+jwt token在header头中的标识，默认为 `Authorization`
+
 ### SigningKey `string`
 
-验证token的签名
+验证token使用的签名字符串
 
 ### ErrorHandler `func(c *baa.Context, err string)`
 
@@ -31,9 +32,9 @@ func Init(b *baa.Baa) {
 
 是否对访问进行接口认证的开关 ,true 验证 false 不验证。多用于在测试环境中，该配置设置为false，则可以不进行jwt认证，专注于业务的实现。默认为false
 
-### Extractor `func(c *baa.Context) (string, error)`
+### Extractor `func(name string, c *baa.Context) (string, error)`
 
-提取jwt凭证的方式，默认从header中获取，可定制为从cookie等获取
+提取jwt凭证的方式，默认从header中获取，可定制为从cookie等获取，`name`参数是提取token的标识
 
 ### EnableAuthOnOptions `bool`
 
@@ -43,13 +44,17 @@ option 方法是否进行验证的开关 true 验证，false 不验证，默认�
 
 加密算法,默认为:SigningMethodHS256
 
-### ExcludeRouteName `[]string`
+### ExcludeURL `[]string`
 
-配置不进行jwt验证的路由，比如登录和注册,格式为auth_login,即 controller_action
+配置不进行jwt验证的URL，比如登录和注册, /login,/register
+
+### ExcludePrefix `[]string`
+
+配置不进行jwt验证的URL前缀，比如所有public目录下的资源无需验证,格式为/public
 
 ### ContextKey 
 
-存储用户自定义信息的key,默认为user
+jwt验证通过后，将解密后的token信息存储在baa.Context中，存储用户自定义信息使用的key, 默认为 user
 
 ## PS：
 
