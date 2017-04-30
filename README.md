@@ -28,10 +28,6 @@ jwt token在header头中的标识，默认为 `Authorization`
 
 验证token过程中出现错误执行的操作， 如用户不设置则默认访问返回401未授权
 
-### CredentialsOptional `bool`
-
-是否对访问进行接口认证的开关 ,true 验证 false 不验证。多用于在测试环境中，该配置设置为false，则可以不进行jwt认证，专注于业务的实现。默认为false
-
 ### Extractor `func(name string, c *baa.Context) (string, error)`
 
 提取jwt凭证的方式，默认从header中获取，可定制为从cookie等获取，`name`参数是提取token的标识

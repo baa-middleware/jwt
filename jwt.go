@@ -26,11 +26,9 @@ type Config struct {
 	SigningKey string
 	// ErrorHandler 验证过程出现错误的处理方法，默认onError方法，可定制其他处理方式
 	ErrorHandler errorHandler
-	// CredentialsOptional 该配置项 是是否对访问进行接口认证的开关 true 验证
-	CredentialsOptional bool
 	// Extractor 提取jwt凭证的方式，默认从header中获取，可定制为从cookie等获取
 	Extractor tokenExtractor
-	// EnableAuthOnOptions 方法是否进行验证的开关 true 验证，false 不验证
+	// EnableAuthOnOptions option 方法是否进行验证的开关 true 验证，false 不验证
 	EnableAuthOnOptions bool
 	// SigningMethod 加密方式
 	SigningMethod gojwt.SigningMethod
@@ -142,12 +140,7 @@ func checkJWT(c *baa.Context, config Config) error {
 		return fmt.Errorf("Error extracting token: %v", err)
 	}
 	if token == "" {
-		if !config.CredentialsOptional {
-			// 没有设置凭证要求，仅仅是没有凭证
-			return nil
-		}
-
-		// 设置了认证选项（CredentialsOptional）, 请求的凭证丢失
+		// 请求的凭证丢失
 		return fmt.Errorf("Required authorization token not found")
 	}
 
