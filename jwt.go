@@ -56,7 +56,8 @@ type Config struct {
 	// 2. 检查是否传递了token
 	// 3. 检查token是否可以正常解密
 	// 4. 检查token是否过期
-	// 5. 执行附加检查
+	// 5. 检查通过，保存customValue到context中
+	// 6. 执行附加检查
 	CustomValidator customValidator
 
 	//该配置项对外隐藏
@@ -109,7 +110,7 @@ func (t *Provider) GeneratorToken(customValue string, ttl time.Duration) (string
 func (t *Provider) GetCustomValue(c *baa.Context) (string, error) {
 	val := c.Get(t.config.ContextKey)
 	if val == nil {
-		return "", fmt.Errorf("token not exist")
+		return "", fmt.Errorf("token value not exist")
 	}
 	return val.(string), nil
 }
@@ -152,12 +153,13 @@ func defaultExtractorFromHeader(name string, c *baa.Context) (string, error) {
 	return authHeaderParts[1], nil
 }
 
-// defaultCheckJWT 按照规则检查token
+// defaultCheckJWT 按照规则检查token 如果出错，返回错误
 // 1. 检查是否是要排除的URL
 // 2. 检查是否传递了token
 // 3. 检查token是否可以正常解密
 // 4. 检查token是否过期
-// 5. 执行附加检查
+// 5. 检查通过，保存customValue到context中
+// 6. 执行附加检查
 func defaultCheckJWT(c *baa.Context, config *Config) error {
 	r := c.Req
 
@@ -221,7 +223,7 @@ func defaultCheckJWT(c *baa.Context, config *Config) error {
 	if config.AddonValidator != nil {
 		err := config.AddonValidator(config.Name, c)
 		if err != nil {
-			return fmt.Errorf("Custom validate is invalid")
+			return fmt.Errorf("JWT Addon validate check failed: %s", err)
 		}
 	}
 

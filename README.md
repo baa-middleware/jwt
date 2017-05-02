@@ -68,6 +68,15 @@ jwt验证通过后，将解密后的token信息存储在baa.Context中，存储�
 
 默认执行 `defaultCheckJWT`
 
+建议检查流程如下：
+
+1. 检查是否是要排除的URL
+2. 检查是否传递了token
+3. 检查token是否可以正常解密
+4. 检查token是否过期
+5. 检查通过，保存customValue到context中
+6. 执行附加检查
+
 ## PS：
 
 - 感谢 [go-jwt](https://github.com/dgrijalva/jwt-go),本中间件基于该包实现jwt验证。
