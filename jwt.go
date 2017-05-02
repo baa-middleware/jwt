@@ -16,8 +16,11 @@ type errorHandler func(c *baa.Context, err error) bool
 // TokenExtractor 获取jwt的token的方法，暂时实现了从header中获取
 type tokenExtractor func(name string, c *baa.Context) (string, error)
 
+// addonValidator 附加验证器
+type addonValidator func(name string, c *baa.Context) error
+
 // customValidator 自定义验证器
-type customValidator func(name string, c *baa.Context) error
+type customValidator func(c *baa.Context, config Config) error
 
 //Config JWTMiddleware 认证的配置
 type Config struct {
@@ -42,6 +45,8 @@ type Config struct {
 	ContextKey string
 	//CustomValidator 自定义验证器
 	CustomValidator customValidator
+	//AddonValidator 附加验证器
+	AddonValidator addonValidator
 
 	//该配置项对外隐藏
 	validationKeyGetter gojwt.Keyfunc
@@ -96,16 +101,18 @@ func JWT(config Config) baa.HandlerFunc {
 			return []byte(config.SigningKey), nil
 		}
 	}
+	if config.CustomValidator == nil {
+		config.CustomValidator = checkJWT
+	}
 
 	return func(c *baa.Context) {
 		// 如果存在错误，即jwt检查token失败，则访问中断返回
 		// 如果错误为nil 则说明验证通过，访问继续
-		if err := checkJWT(c, config); err != nil {
+		if err := config.CustomValidator(c, config); err != nil {
 			if ret := config.ErrorHandler(c, err); ret == false {
 				c.Break()
 			}
 		}
-
 		c.Next()
 	}
 }
@@ -170,9 +177,9 @@ func checkJWT(c *baa.Context, config Config) error {
 	//将用户信息从token中获取，写到baa的context中
 	c.Set(config.ContextKey, claims[config.ContextKey])
 
-	//执行客户自定义的验证
-	if config.CustomValidator != nil {
-		err := config.CustomValidator(config.Name, c)
+	//执行客户附加的验证
+	if config.AddonValidator != nil {
+		err := config.AddonValidator(config.Name, c)
 		if err != nil {
 			return fmt.Errorf("Custom validate is invalid")
 		}
