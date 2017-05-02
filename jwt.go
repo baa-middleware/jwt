@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	gojwt "github.com/dgrijalva/jwt-go"
 	baa "gopkg.in/baa.v1"
@@ -16,11 +17,16 @@ type errorHandler func(c *baa.Context, err error) bool
 // TokenExtractor 获取jwt的token的方法，暂时实现了从header中获取
 type tokenExtractor func(name string, c *baa.Context) (string, error)
 
-// addonValidator 附加验证器
+// addonValidator 附加验证器, jwt验证通过后执行
 type addonValidator func(name string, c *baa.Context) error
 
-// customValidator 自定义验证器
-type customValidator func(c *baa.Context, config Config) error
+// customValidator 自定义验证器，如果设置了将不使用默认的jwt校验
+type customValidator func(c *baa.Context, config *Config) error
+
+// Provider JWT生成和验证提供者
+type Provider struct {
+	config *Config
+}
 
 //Config JWTMiddleware 认证的配置
 type Config struct {
@@ -43,26 +49,96 @@ type Config struct {
 	// ContextKey Context key to store user information from the token into context.
 	// Optional. Default value "user".
 	ContextKey string
-	//CustomValidator 自定义验证器
-	CustomValidator customValidator
 	//AddonValidator 附加验证器
 	AddonValidator addonValidator
+	// CustomValidator 自定义验证器，建议执行过程：
+	// 1. 检查是否是要排除的URL
+	// 2. 检查是否传递了token
+	// 3. 检查token是否可以正常解密
+	// 4. 检查token是否过期
+	// 5. 执行附加检查
+	CustomValidator customValidator
 
 	//该配置项对外隐藏
 	validationKeyGetter gojwt.Keyfunc
 }
 
-// onError 默认的认证过程出现错误的处理方式
+// New 创建一个新的JWT生成和验证对象
+func New(config *Config) *Provider {
+	if config.Name == "" {
+		config.Name = "Authorization"
+	}
+	if config.ContextKey == "" {
+		config.ContextKey = config.Name
+	}
+	if config.ErrorHandler == nil {
+		config.ErrorHandler = defaultOnError
+	}
+	if config.Extractor == nil {
+		config.Extractor = defaultExtractorFromHeader
+	}
+	if config.SigningMethod == nil {
+		config.SigningMethod = gojwt.SigningMethodHS256
+	}
+
+	if config.SigningKey == "" {
+		panic("jwt middleware requires signing key")
+	} else {
+		config.validationKeyGetter = func(token *gojwt.Token) (interface{}, error) {
+			return []byte(config.SigningKey), nil
+		}
+	}
+	if config.CustomValidator == nil {
+		config.CustomValidator = defaultCheckJWT
+	}
+
+	return &Provider{config}
+}
+
+// GeneratorToken 生成token，传入token中要存储的数据和有效期
+func (t *Provider) GeneratorToken(customValue string, ttl time.Duration) (string, error) {
+	claims := make(gojwt.MapClaims)
+	claims[t.config.ContextKey] = customValue
+	claims["exp"] = time.Now().Add(ttl).Unix()
+	token := gojwt.NewWithClaims(t.config.SigningMethod, claims)
+	// 使用自定义字符串加密 and get the complete encoded token as a string
+	return token.SignedString([]byte(t.config.SigningKey))
+}
+
+// GetCustomValue 返回token中存储的数据，如果token验证失败返回错误
+func (t *Provider) GetCustomValue(c *baa.Context) (string, error) {
+	val := c.Get(t.config.ContextKey)
+	if val == nil {
+		return "", fmt.Errorf("token not exist")
+	}
+	return val.(string), nil
+}
+
+//JWT json web token中间件注册到baa
+func JWT(t *Provider) baa.HandlerFunc {
+	return func(c *baa.Context) {
+		// 如果存在错误，即jwt检查token失败，则访问中断返回
+		// 如果错误为nil 则说明验证通过，访问继续
+		if err := t.config.CustomValidator(c, t.config); err != nil {
+			if ret := t.config.ErrorHandler(c, err); ret == false {
+				c.Break()
+			}
+		}
+		c.Next()
+	}
+}
+
+// defaultOnError 默认的认证过程出现错误的处理方式
 // 如果返回 false 将 c.Break; 如果返回 true 将 c.Next
-func onError(c *baa.Context, err error) bool {
+func defaultOnError(c *baa.Context, err error) bool {
 	//认证授权失败
 	c.Resp.WriteHeader(http.StatusUnauthorized)
 	c.Resp.Write([]byte(err.Error()))
 	return false
 }
 
-//FromAuthHeader 从request的header中获取凭证信息
-func FromAuthHeader(name string, c *baa.Context) (string, error) {
+// defaultExtractorFromHeader 从request的header中获取凭证信息
+func defaultExtractorFromHeader(name string, c *baa.Context) (string, error) {
 	authHeader := c.Req.Header.Get(name)
 	if authHeader == "" || len(authHeader) <= 7 {
 		return "", nil // No error, just no token
@@ -76,49 +152,13 @@ func FromAuthHeader(name string, c *baa.Context) (string, error) {
 	return authHeaderParts[1], nil
 }
 
-//JWT json web token中间件注册到baa
-func JWT(config Config) baa.HandlerFunc {
-	if config.Name == "" {
-		config.Name = "Authorization"
-	}
-	if config.ErrorHandler == nil {
-		config.ErrorHandler = onError
-	}
-	if config.Extractor == nil {
-		config.Extractor = FromAuthHeader
-	}
-	if config.SigningMethod == nil {
-		config.SigningMethod = gojwt.SigningMethodHS256
-	}
-	if config.ContextKey == "" {
-		config.ContextKey = "user"
-	}
-
-	if config.SigningKey == "" {
-		panic("jwt middleware requires signing key")
-	} else {
-		config.validationKeyGetter = func(token *gojwt.Token) (interface{}, error) {
-			return []byte(config.SigningKey), nil
-		}
-	}
-	if config.CustomValidator == nil {
-		config.CustomValidator = checkJWT
-	}
-
-	return func(c *baa.Context) {
-		// 如果存在错误，即jwt检查token失败，则访问中断返回
-		// 如果错误为nil 则说明验证通过，访问继续
-		if err := config.CustomValidator(c, config); err != nil {
-			if ret := config.ErrorHandler(c, err); ret == false {
-				c.Break()
-			}
-		}
-		c.Next()
-	}
-}
-
-//按照规则检查token
-func checkJWT(c *baa.Context, config Config) error {
+// defaultCheckJWT 按照规则检查token
+// 1. 检查是否是要排除的URL
+// 2. 检查是否传递了token
+// 3. 检查token是否可以正常解密
+// 4. 检查token是否过期
+// 5. 执行附加检查
+func defaultCheckJWT(c *baa.Context, config *Config) error {
 	r := c.Req
 
 	if !config.EnableAuthOnOptions {

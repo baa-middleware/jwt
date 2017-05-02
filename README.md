@@ -24,16 +24,6 @@ jwt token在header头中的标识，默认为 `Authorization`
 
 验证token使用的签名字符串
 
-### ErrorHandler `func(c *baa.Context, err error) bool`
-
-验证token过程中出现错误执行的操作， 如用户不设置则默认访问返回401未授权
-
-如果返回false 将 c.Break 如果返回 true 将 c.Next
-
-### Extractor `func(name string, c *baa.Context) (string, error)`
-
-提取jwt凭证的方式，默认从header中获取，可定制为从cookie等获取，`name`参数是提取token的标识
-
 ### EnableAuthOnOptions `bool`
 
 option 方法是否进行验证的开关 true 验证，false 不验证，默认为false
@@ -53,6 +43,30 @@ option 方法是否进行验证的开关 true 验证，false 不验证，默认�
 ### ContextKey 
 
 jwt验证通过后，将解密后的token信息存储在baa.Context中，存储用户自定义信息使用的key, 默认为 user
+
+### Extractor `func(name string, c *baa.Context) (string, error)`
+
+提取jwt凭证的方式，默认从header中获取，可定制为从cookie等获取，`name`参数是提取token的标识
+
+默认执行 `defaultExtractorFromHeader`
+
+### ErrorHandler `func(c *baa.Context, err error) bool`
+
+验证token过程中出现错误执行的操作， 如用户不设置则默认访问返回401未授权
+
+如果返回false 将 c.Break 如果返回 true 将 c.Next
+
+默认执行 `defaultOnError`
+
+### AddonValidator `func(name string, c *baa.Context) error`
+
+附加的token检查器，将在标准token检查通过后执行
+
+### CustomValidator `func(c *baa.Context, config *Config) error`
+
+自定义token检查器
+
+默认执行 `defaultCheckJWT`
 
 ## PS：
 
