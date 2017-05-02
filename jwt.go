@@ -9,10 +9,11 @@ import (
 	baa "gopkg.in/baa.v1"
 )
 
-//无论什么时候发生错误，该函数将被调用
-type errorHandler func(c *baa.Context, err error)
+// errorHandler 无论什么时候发生错误，该函数将被调用
+// 如果返回 false 将 c.Break; 如果返回 true 将 c.Next
+type errorHandler func(c *baa.Context, err error) bool
 
-//TokenExtractor 获取jwt的token的方法，暂时实现了从header中获取
+// TokenExtractor 获取jwt的token的方法，暂时实现了从header中获取
 type tokenExtractor func(name string, c *baa.Context) (string, error)
 
 // customValidator 自定义验证器
@@ -46,11 +47,13 @@ type Config struct {
 	validationKeyGetter gojwt.Keyfunc
 }
 
-// 默认的认证过程出现错误的处理方式
-func onError(c *baa.Context, err error) {
+// onError 默认的认证过程出现错误的处理方式
+// 如果返回 false 将 c.Break; 如果返回 true 将 c.Next
+func onError(c *baa.Context, err error) bool {
 	//认证授权失败
 	c.Resp.WriteHeader(http.StatusUnauthorized)
 	c.Resp.Write([]byte(err.Error()))
+	return false
 }
 
 //FromAuthHeader 从request的header中获取凭证信息
@@ -96,10 +99,11 @@ func JWT(config Config) baa.HandlerFunc {
 
 	return func(c *baa.Context) {
 		// 如果存在错误，即jwt检查token失败，则访问中断返回
-		//如果错误为nil 则说明验证通过，访问继续
+		// 如果错误为nil 则说明验证通过，访问继续
 		if err := checkJWT(c, config); err != nil {
-			config.ErrorHandler(c, err)
-			c.Break()
+			if ret := config.ErrorHandler(c, err); ret == false {
+				c.Break()
+			}
 		}
 
 		c.Next()
