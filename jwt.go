@@ -1,3 +1,4 @@
+// Package jwt implement jwt auth token validator for baa
 package jwt
 
 import (
@@ -10,61 +11,60 @@ import (
 	baa "gopkg.in/baa.v1"
 )
 
-// errorHandler 无论什么时候发生错误，该函数将被调用
-// 如果返回 false 将 c.Break; 如果返回 true 将 c.Next
+// errorHandler handle error and return a bool value
+// return false will break conext, return true will handle next context
 type errorHandler func(c *baa.Context, err error) bool
 
-// TokenExtractor 获取jwt的token的方法，暂时实现了从header中获取
+// TokenExtractor extract jwt token
 type tokenExtractor func(name string, c *baa.Context) (string, error)
 
-// addonValidator 附加验证器, jwt验证通过后执行
+// addonValidator addon validator, after jwt standard validator pass
 type addonValidator func(name string, c *baa.Context) error
 
-// customValidator 自定义验证器，如果设置了将不使用默认的jwt校验
-type customValidator func(c *baa.Context, config *Config) error
+// customValidator jwt standard validator
+type customValidator func(config *Config, c *baa.Context) error
 
-// Provider JWT生成和验证提供者
+// Provider JWT validator handler
 type Provider struct {
 	config *Config
 }
 
-//Config JWTMiddleware 认证的配置
+//Config JWT Middleware config
 type Config struct {
-	// Name 配置token标识，默认为 Authorization
+	// Name token name, default: Authorization
 	Name string
 	// Signing key to validate token
 	SigningKey string
-	// ErrorHandler 验证过程出现错误的处理方法，默认onError方法，可定制其他处理方式
+	// ErrorHandler validate error handler, default: defaultOnError
 	ErrorHandler errorHandler
-	// Extractor 提取jwt凭证的方式，默认从header中获取，可定制为从cookie等获取
+	// Extractor extract jwt token, default extract from header: defaultExtractorFromHeader
 	Extractor tokenExtractor
-	// EnableAuthOnOptions option 方法是否进行验证的开关 true 验证，false 不验证
+	// EnableAuthOnOptions http option method validate switch
 	EnableAuthOnOptions bool
-	// SigningMethod 加密方式
+	// SigningMethod sign method, default: HS256
 	SigningMethod gojwt.SigningMethod
-	// ExcludeURL 配置不进行jwt验证的具体URL
+	// ExcludeURL exclude url will skip jwt validator
 	ExcludeURL []string
-	// ExcludePrefix 配置不进行jwt验证的URL前缀
+	// ExcludePrefix exclude url prefix will skip jwt validator
 	ExcludePrefix []string
 	// ContextKey Context key to store user information from the token into context.
 	// Optional. Default value "user".
 	ContextKey string
-	//AddonValidator 附加验证器
+	//AddonValidator addon validator will handle after standard validator
 	AddonValidator addonValidator
-	// CustomValidator 自定义验证器，建议执行过程：
-	// 1. 检查是否是要排除的URL
-	// 2. 检查是否传递了token
-	// 3. 检查token是否可以正常解密
-	// 4. 检查token是否过期
-	// 5. 检查通过，保存customValue到context中
-	// 6. 执行附加检查
+	// CustomValidator custom validator suggestion flow：
+	// 1. check exlude url, and exclude url prefix
+	// 2. extract token string
+	// 3. check token sign
+	// 4. check token ttl
+	// 5. save custom value to conext after check passed
+	// 6. handle addon validator
 	CustomValidator customValidator
-
-	//该配置项对外隐藏
+	// validationKeyGetter
 	validationKeyGetter gojwt.Keyfunc
 }
 
-// New 创建一个新的JWT生成和验证对象
+// New create a JWT provider
 func New(config *Config) *Provider {
 	if config.Name == "" {
 		config.Name = "Authorization"
@@ -96,17 +96,17 @@ func New(config *Config) *Provider {
 	return &Provider{config}
 }
 
-// GeneratorToken 生成token，传入token中要存储的数据和有效期
+// GeneratorToken generate token by custom value and token ttl
 func (t *Provider) GeneratorToken(customValue string, ttl time.Duration) (string, error) {
 	claims := make(gojwt.MapClaims)
 	claims[t.config.ContextKey] = customValue
 	claims["exp"] = time.Now().Add(ttl).Unix()
 	token := gojwt.NewWithClaims(t.config.SigningMethod, claims)
-	// 使用自定义字符串加密 and get the complete encoded token as a string
+	// sign token and get the complete encoded token as a string
 	return token.SignedString([]byte(t.config.SigningKey))
 }
 
-// GetCustomValue 返回token中存储的数据，如果token验证失败返回错误
+// GetCustomValue return custom value in token, or returns error
 func (t *Provider) GetCustomValue(c *baa.Context) (string, error) {
 	val := c.Get(t.config.ContextKey)
 	if val == nil {
@@ -115,12 +115,10 @@ func (t *Provider) GetCustomValue(c *baa.Context) (string, error) {
 	return val.(string), nil
 }
 
-//JWT json web token中间件注册到baa
+//JWT json web token for baa
 func JWT(t *Provider) baa.HandlerFunc {
 	return func(c *baa.Context) {
-		// 如果存在错误，即jwt检查token失败，则访问中断返回
-		// 如果错误为nil 则说明验证通过，访问继续
-		if err := t.config.CustomValidator(c, t.config); err != nil {
+		if err := t.config.CustomValidator(t.config, c); err != nil {
 			if ret := t.config.ErrorHandler(c, err); ret == false {
 				c.Break()
 			}
@@ -129,16 +127,15 @@ func JWT(t *Provider) baa.HandlerFunc {
 	}
 }
 
-// defaultOnError 默认的认证过程出现错误的处理方式
-// 如果返回 false 将 c.Break; 如果返回 true 将 c.Next
+// defaultOnError default error handler
+// return false will break conext, return true will handle next context
 func defaultOnError(c *baa.Context, err error) bool {
-	//认证授权失败
 	c.Resp.WriteHeader(http.StatusUnauthorized)
 	c.Resp.Write([]byte(err.Error()))
 	return false
 }
 
-// defaultExtractorFromHeader 从request的header中获取凭证信息
+// defaultExtractorFromHeader extract token from header
 func defaultExtractorFromHeader(name string, c *baa.Context) (string, error) {
 	authHeader := c.Req.Header.Get(name)
 	if authHeader == "" || len(authHeader) <= 7 {
@@ -153,14 +150,14 @@ func defaultExtractorFromHeader(name string, c *baa.Context) (string, error) {
 	return authHeaderParts[1], nil
 }
 
-// defaultCheckJWT 按照规则检查token 如果出错，返回错误
-// 1. 检查是否是要排除的URL
-// 2. 检查是否传递了token
-// 3. 检查token是否可以正常解密
-// 4. 检查token是否过期
-// 5. 检查通过，保存customValue到context中
-// 6. 执行附加检查
-func defaultCheckJWT(c *baa.Context, config *Config) error {
+// defaultCheckJWT execlude token check flow, or returns error
+// 1. check exlude url, and exclude url prefix
+// 2. extract token string
+// 3. check token sign
+// 4. check token ttl
+// 5. save custom value to conext after check passed
+// 6. handle addon validator
+func defaultCheckJWT(config *Config, c *baa.Context) error {
 	r := c.Req
 
 	if !config.EnableAuthOnOptions {
@@ -169,7 +166,7 @@ func defaultCheckJWT(c *baa.Context, config *Config) error {
 		}
 	}
 
-	// 检查排除的URL
+	// check exclude url
 	if len(config.ExcludeURL) > 0 {
 		for _, url := range config.ExcludeURL {
 			if url == c.Req.URL.Path {
@@ -177,6 +174,7 @@ func defaultCheckJWT(c *baa.Context, config *Config) error {
 			}
 		}
 	}
+	// check exclude url prefix
 	if len(config.ExcludePrefix) > 0 {
 		for _, prefix := range config.ExcludePrefix {
 			if strings.HasPrefix(c.Req.URL.Path, prefix) {
@@ -185,19 +183,18 @@ func defaultCheckJWT(c *baa.Context, config *Config) error {
 		}
 	}
 
-	// 从request中按照初始化jwt中间件制定的方法获取token
+	// extract token
 	token, err := config.Extractor(config.Name, c)
 
-	// 认证过程中出现任何错误，将调用制定的错误处理函数并且返回发生的错误
 	if err != nil {
 		return fmt.Errorf("Error extracting token: %v", err)
 	}
 	if token == "" {
-		// 请求的凭证丢失
+		// no token
 		return fmt.Errorf("Required authorization token not found")
 	}
 
-	// 按照算法解密token
+	// parse token value
 	parsedToken, err := gojwt.Parse(token, config.validationKeyGetter)
 
 	if err != nil {
@@ -214,12 +211,11 @@ func defaultCheckJWT(c *baa.Context, config *Config) error {
 	if !parsedToken.Valid {
 		return fmt.Errorf("Token is invalid")
 	}
-	//将自定义信息提取出来放到baa的context中，避免多次解密
+	// save custom value to context
 	claims := parsedToken.Claims.(gojwt.MapClaims)
-	//将用户信息从token中获取，写到baa的context中
 	c.Set(config.ContextKey, claims[config.ContextKey])
 
-	//执行客户附加的验证
+	// handle addon validator
 	if config.AddonValidator != nil {
 		err := config.AddonValidator(config.Name, c)
 		if err != nil {
