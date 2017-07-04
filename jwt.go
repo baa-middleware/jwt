@@ -170,7 +170,6 @@ func defaultCheckJWT(config *Config, c *baa.Context) error {
 	if len(config.ExcludeURL) > 0 {
 		for _, url := range config.ExcludeURL {
 			if url == c.Req.URL.Path {
-				c.Set("JwtSkip", true)
 				return nil
 			}
 		}
@@ -179,7 +178,6 @@ func defaultCheckJWT(config *Config, c *baa.Context) error {
 	if len(config.ExcludePrefix) > 0 {
 		for _, prefix := range config.ExcludePrefix {
 			if strings.HasPrefix(c.Req.URL.Path, prefix) {
-				c.Set("JwtSkip", true)
 				return nil
 			}
 		}
