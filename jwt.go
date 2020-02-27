@@ -8,7 +8,7 @@ import (
 	"time"
 
 	gojwt "github.com/dgrijalva/jwt-go"
-	baa "gopkg.in/baa.v1"
+	baa "github.com/go-baa/baa"
 )
 
 // errorHandler handle error and return a bool value
